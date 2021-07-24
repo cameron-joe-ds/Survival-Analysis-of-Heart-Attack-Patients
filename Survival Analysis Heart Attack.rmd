@@ -1,0 +1,388 @@
+---
+title: "PSTAT 175 Project"
+author: 'Group N: Michael Quitana, Robert Hernandez, and Cameron Joe'
+date: "12/4/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, out.height="20%", fig.align = 'center'}
+#knitr::include_graphics("/Users/anher/Documents/R/R documents/Ucsbseal.png")
+```
+
+# Section 1: Descriptions and Covariates
+|     The whas500 data set is provided by Dr. Robert J. Goldberg of the Department of Cardiology at the University of Massachusetts Medical (David W. Hosmer, et al. 13). The goal of the WHAS study is to describe factors associated with trends over time in the incidence and survival rates following hospital admission for acute myocardial infarction (MI). The WHAS study was conducted over a 13 year period starting in 1975 through 2001 with MI patients admitted in hospitals in Massachusetts Standard Metropolitan Statistical Area resulting in more than 11,000 admissions (David W. Hosmer, et al. 13). The whas500 data set is a 23 percent random sample from the years 1997, 1999, and 2001 from the main data of the WHAS study. The data was available on the course Gauchospace, but is publicly accessible on the John Wiley & Sons website ("WHAS Survival"). 
+
+|     The whas500 dataset consists of 22 variables with the two most important for our survival analysis being los -length of stay at the hospital- and dstat -discharge status (being either 0 for alive or 1 for dead) (David W. Hosmer, et al. 22). There are five continuous covariates to potentially analyze: age, initial heart rate, systolic blood pressure, diastolic blood pressure, and body mass index. In addition, there are seven binary categorical covariates: history of cardiovascular disease (1 = Yes, 0 = No), atrial fibrillation (Y/N), cardiogenic shock (Y/N), congestive heart complications (Y/N), complete heart block (Y/N), MI order (if it is the patient’s first heart attack or not), and MI type (Q-wave or non Q-wave) (David W. Hosmer, et al. 22). There are also categorical variables for gender and cohort year(1997, 1999, 2001). Other variables include the unique patient id and three date variables (for admission, discharge, and last follow-up). Lastly, there is lenfol -the number of days between the last patient follow-up and hospital admission- and fstat -the patient’s vital status at this last follow-up with 0 being alive and 1 being dead (David W. Hosmer, et al. 22). The inclusion of these variables allow for the construction of a recurrent events model with two survival analyses. 
+
+|     The primary objective of this paper is to construct a well-fit model of heart attack patient survival rates using the covariates provided in the data. In addition, once a model has been built, we aim to determine how the selected variables affect survival rates (beta estimates and confindence intervals).  
+
+|     In order to accomplish our objectives, we first employ basic Kaplan-Meier plots to better understand our data and covariates. We then use BIC and forward selection to construct a Cox proportional-hazards model that describes the data well but does not overfit. The model's proportional hazards assumption is then checked through a log-log plot and analysis of the residuals. Lastly, a more complex recurrent events model is constructed for the survival rate of the hospital stay and the survival rate after admission. 
+
+  
+# Section 2: KM Plot
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+library(survival)
+library(survminer)
+names <- c("id", "age", "gender", "hr", "sysbp", "diasbp", "bmi", "cvd", "afb", "sho", "chf", "av3", "miord", "mitype", "year", "admitdate", "disdate", "fdate", "los", "dstat","lenfol", "fstat")
+
+#whas <- read.table("/Users/anher/Documents/R/R documents/whas500.dat", col.names = names)
+
+whas.fit <- survfit(Surv(los, dstat) ~ 1, data = whas)
+  
+ggsurvplot(whas.fit,
+     title = "Survival Probability After \nHeart Attack Hospital Admission", 
+     palette = "mediumturquoise",
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (the event being death)"
+) 
+```
+
+|     Upon initial glance at the Kaplan-Meier plot, things look to be as we expected. As time goes on, the survival rate continues to decrease. As more patients leave the risk pool by either dying or being censored (being discharged from the hospital alive), we see that the survival functions begins to move in larger steps for later times. 
+
+## KM Plot on a few Covariates 
+|     To quickly explore our data, we thought it would be best to construct KM plots for some of the covariates we were interested in to see how they related to survival times. Individual KM plots and brief, rough analyses are provided below. 
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+whas.fit.sho <- survfit(Surv(los, dstat) ~ sho, data = whas)
+  
+ggsurvplot(whas.fit.sho,
+     title = "Survival Probability After Heart Attack Hospital Admission: \nSeparated by Presence of Cardiogenic Shock", 
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (event being death)"
+) 
+```
+|     The two plots deviate greatly from each other, implying that the presence of cardiogenic shock greatly reduces survival probabilities.  
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+whas.fit.gender <- survfit(Surv(los, dstat) ~ gender, data = whas)
+  
+ggsurvplot(whas.fit.gender,
+     title = "Survival Probability After Heart Attack Hospital Admission \nSeparated by Gender", 
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (event being death)"
+) 
+```
+|     The difference between genders is less apparent than cardiogenic shock (especially within the 10 day range). But, it looks as if males (marked as 1) have a slightly lower survival probability in comparison to females.
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+whas.fit.av3 <- survfit(Surv(los, dstat) ~ av3, data = whas)
+
+ggsurvplot(whas.fit.av3,
+     title = "Survival Probability After Heart Attack Hospital Admission \nSeparated by Complete Heart Failure", 
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (event being death)"
+) 
+```
+|     Looking at the graph, it appears that those that experience complete heart failure have a lower survival probability. This cannot be said confidently as there is a smaller sample size for those who have experienced complete heart failure. 
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+whas.fit.miord <- survfit(Surv(los, dstat) ~ miord, data = whas)
+
+ggsurvplot(whas.fit.miord,
+     title = "Survival Probability After Heart Attack Hospital Admission \nSeparated by MI Order (First or Reccurent)", 
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (event being death)"
+) 
+```
+|     Looking at the graph, it appears that those who have already had a prior heart attack have a lower survival probability than those who are experiencing their first heart attack.
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center", result='hide', warning=FALSE, message=FALSE}
+whas.fit.cvd <- survfit(Surv(los, dstat) ~ cvd, data = whas)
+
+ggsurvplot(whas.fit.cvd,
+     title = "Survival Probability After Heart Attack Hospital Admission \nSeparated by History of Cardiovascular Disease", 
+     xlab = "Time (Days between hospital admission and discharge)",
+     ylab = "Survival Probability (event being death)"
+) 
+```
+|     When separating on history of cardiovascular disease, it is difficult to determine the relationship between the two groups. This covariate -along with all other prior KM plot analyses- will be explored at more depth in further sections. 
+
+# Section 3: Coxph Model fitting 
+## First Round of Fitting 
+```{r}
+whas1 <- coxph(Surv(los, dstat) ~ age, data = whas)
+whas2 <- coxph(Surv(los, dstat) ~ gender, data = whas)
+whas3 <- coxph(Surv(los, dstat) ~ hr, data = whas)
+whas4 <- coxph(Surv(los, dstat) ~ sysbp, data = whas)
+whas5 <- coxph(Surv(los, dstat) ~ diasbp, data = whas)
+whas6 <- coxph(Surv(los, dstat) ~ bmi, data = whas)
+whas7 <- coxph(Surv(los, dstat) ~ cvd, data = whas)
+whas8 <- coxph(Surv(los, dstat) ~ afb, data = whas)
+whas9 <- coxph(Surv(los, dstat) ~ sho, data = whas)
+whas10 <- coxph(Surv(los, dstat) ~ chf, data = whas)
+whas11 <- coxph(Surv(los, dstat) ~ av3, data = whas)
+whas12 <- coxph(Surv(los, dstat) ~ miord, data = whas)
+whas13 <- coxph(Surv(los, dstat) ~ mitype, data = whas)
+whas14 <- coxph(Surv(los, dstat) ~ year, data = whas)
+
+BIC(whas1, whas2, whas3, whas4, whas5, whas6, whas7, whas8, whas9, whas10, whas11, whas12, whas13, whas14)
+```
+
+|     Using forward selection to create the model, for the first round of model fitting, we created coxph models using each covariate. We chose to use BIC for model evaluation as it punishes the inclusion of additional covariates harder than AIC and we would like to limit the number of covariates in the model to avoid overfitting. For the first round of models, the model using sho or cardiogenic shock was found to yield the lowest BIC of 393.7014. 	
+
+## Successive rounds of fitting 
+```{r}
+whas9.1 <- coxph(Surv(los, dstat) ~ sho + age, data = whas)
+whas9.1.3 <- coxph(Surv(los, dstat) ~ sho + age + sysbp, data = whas)
+whas9.1.3.2 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + hr, data = whas)
+
+BIC(whas9.1, whas9.1.3, whas9.1.3.2)
+```
+
+|     For following rounds of model fitting, each of the remaining covariates were added to the previous model and tested for BIC (code for all iterations included in the appendix). The lowest BIC model would be kept and built upon in following iterations. In the second round of model fitting, it was found that the model using both sho + age was found to yield the lowest BIC of 382.6642. For the third round of model fitting, it was found that the model using sho + age + sysbp (or systolic blood pressure) was found to yield the lowest BIC of 378.7440. For the fourth round of model fitting, it was found that the model using sho + age + sysbp + hr (heart rate) was found to yield the lowest BIC of 380.9133. As this model yielded a higher BIC than the last iteration, we know that the third model is the best for modeling survival rates and including any other covariates would lower the BIC. 
+
+## Finding coefficient estimates and confidence intervals
+```{r}
+# P-values
+summary(whas9.1.3)$coefficients[, 5]
+# Estimates 
+exp(coef(whas9.1.3))
+# 95% CI
+exp(confint(whas9.1.3))
+# Likelihood ratio p-value 
+summary(whas9.1.3)
+```
+
+|     The sho covariate was found to be significant with a p-value of 3.82e-05, a $\beta$ estimate of 4.447891, and a standard 95% confidence interval of (2.1862062, 9.0493437). So, those with cardiogenic shock have a higher hazard rate (with the event being death) in comparison to those who did not experience cardiogenic shock. The age covariate was found to be significant with a p-value of 0.000559, a $\beta$ estimate of 1.057152, and a confidence invterval of (1.0243014, 1.0910567). So, a one year age increase yields a slightly higher hazard rate. The sysbp covariate was found to be significant with a p-value of 0.009884, a $\beta$ estimate of 0.986227, and a a confidence interval of (0.9758899, 0.9966731). So, an increase in systolic blood pressure is associated with a slightly lower hazard rate (death rate). A low p-value of 1e-09 for the likelihood ratio test indicates the significance of the overall model. 
+
+# Part 4: Checking Coxph Assumptions
+
+## Observation of Log-log plot
+```{r fig2, fig.height = 6, fig.width = 10, fig.align = "center", echo=FALSE}
+whas.fit.sho <- survfit(Surv(los, dstat) ~ sho, data = whas)
+
+plot(whas.fit.sho,
+     fun = "cloglog",
+     col = c("red", "green"),
+     main = "log-log Survival Functions Separated by Sho",
+     ylab = "log(-log(S(t))",
+     xlab = "Time (Days)")
+legend(35, -0.25, legend = c("Sho 1", "Sho 0"), col= c("red", "green"), lty=1:1, cex=0.8 )
+```
+|     The log-log plot hints that the proportional hazards assumption has not been violated as the two functions do not cross and are close to being parallel. Since the proportional hazards is not violated, the ratio of the hazards is constant over time.
+
+# Cox.zph testing
+```{r}
+whas9.1.3.zph <- cox.zph(whas9.1.3, transform="rank")
+whas9.1.3.zph
+```
+|     All of the covariates have a large p-value, so we fail to reject the null hypothesis that the model follows proportional hazards assumptions. This is good for our model as the model continues to satisfy the proportional hazards assumption. So, we will not need to use time varying coefficients to make the model proportional. 
+
+## Residuals Plots
+```{r}
+whas9.1.3.test <- cox.zph(
+  coxph(Surv(los,dstat)~sho, data=whas), transform="rank" )
+whas9.1.3.test
+```
+
+```{r, echo=FALSE}
+ggcoxzph(whas9.1.3.zph, var = "sho")
+```
+
+|     The Schoenfield test plot shows that the residuals closely resemble horizontal lines, so our model still satisfies the proportional hazards assumption. Also, applying coxzph to the sho covariate results in a large p-value of 0.52, so once again we fail to reject the null hypothesis that the model follows the proportional hazards assumption. 
+
+# Part 5 Recurrent Events
+|     We chose to use recurrent event models in our project as they are able to represent the differences between time in the hospital, and time outside of the hospital.
+
+|     We will be looking at the covariates, Cardiogenic Shock(sho), Age in Years(age), and Initial Systolic Blood Pressure(sysbp) as we found these to be the most significant variables in our model fitting process.
+
+## First Gap(Marginal) Model
+|     For our first gap model, we are looking at length of stay in the hospital and status upon release.
+From our KM graph displaying Cardiogenic Shock, we see patients suffering from this illness have a much lower survival probability than patients without shock.
+
+The age box plots displays that older patients seem to die more frequently than young patients. While the Systolic Blood pressure box plots has a more even distribution
+
+|     Our CoxPH and confidence intervals agree with our graphs for the most part. Cardiogenic Shock has a hazard rate of 4.44 and a confidence interval above 2.**[2.18620,9.04934]** As well as a small p-value proving it's significance.
+Age is also significant with a small p-value, a 1 year increase in age leads to around a 6% increase in hazard rate. The confidence interval also does not contain 1.
+Systolic Blood Pressure is also significant, a 1 unit increase in blood pressure leads to a 1.5% drop in hazard rate. The p-value displays this is significant and our confidence interval not containing one confirms that.
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center"}
+marg.surv1 <- Surv(whas$los, whas$dstat)
+marg.fit1 <- surv_fit(marg.surv1 ~ sho, data = whas)
+par(mfrow=c(2,2))
+ggsurvplot(marg.fit1, title = "First Marginal Model KM Plot \nSeparated by Cardiogenic Shock", ylab="Survival Probability",xlab="Length of Stay in Hospital(In days)")
+
+par(mar=c(5,5,4,1)+.1)
+boxplot(whas$age~whas$dstat,main = "Boxplot of Initial Age (Years)",xlab="Status(0=Alive)(1=Dead) of patients in the hospital.",ylab="Age of Patients in the Hospital",col="red")
+boxplot(whas$sysbp~whas$dstat,main = "Boxplot of Systolic Blood Pressure",xlab="Status(0=Alive)(1=Dead) of patients in the hospital",ylab="Systolic Blood Pressure of patients in the hospital",col=6)
+
+#mean(whas$sysbp) #144.7
+#mean(whas$age) # 69.8
+#coxph and CI
+coxph(marg.surv1 ~ sho+age+sysbp, data = whas)
+CI1 <- coxph(marg.surv1 ~ sho+age+sysbp, data = whas)
+exp(coef(CI1))
+as.table(exp(confint(CI1)))
+```
+
+## Second Gap Model Adjustments(Trials and Tribulations)
+|     Here we have our Cox Proportional hazard rates for our second gap model measuring the covariates but now for time outside of the hospital. Before we can start analyzing these hazard rates there is an adjustment we need to make in our model. As you can see from our 6th observation below, subjects who died in the hospital(dstat=1) are not factored out of our gap model for subjects outside the hospital(fstat=1). 
+
+|     In order to avoid overestimating our hazard rate we will need to make an adjustment to our data. We will not be using data from this Cox PH model.
+```{r}
+marg.surv3 <- Surv(whas$lenfol-whas$los,whas$fstat)
+coxph(marg.surv3~whas$sho+whas$age+whas$sysbp)
+whas[6,]
+whas$dstat[whas$id==6]
+whas$fstat[whas$id==6]
+```
+
+## Adjusted Second Gap Model(Time outside of the hospital)
+|     The adjustment we made was removing the 39 observations where subjects died in the hospital, now we are only viewing the 461 subject who made it out of the hospital.
+```{r}
+sum(whas$dstat==1)
+subset.whas <- whas[which(whas$dstat==0), ]
+
+```
+
+## Graphs For Second Gap Model
+|     These graphs give us an idea of what might have happened during the length of time outside of the hospital, which we can see is well over 100 times greater than our length of stay inside the hospital. For cardiogenic shock KM Plot we see that the two lines intersect multiple times, which means these survival probabilities are maybe similar.
+
+|     From our age box plots it seems that older patients are more likely to die, while younger patients stay alive. From our systolic blood pressure box plots it seems there is a even distribution between the two status, indicating they may be similar.
+
+```{r fig1, fig.height = 6, fig.width = 10, fig.align = "center"}
+mean(subset.whas$los)
+mean(subset.whas$lenfol)
+marg.surv3 <- Surv(subset.whas$lenfol-subset.whas$los, subset.whas$fstat)
+marg.fit3 <- surv_fit(marg.surv3 ~ sho, data = subset.whas)
+ggsurvplot(title = "Second Marginal Model KM Plot \nSeparated by Cardiogenic Shock", marg.fit3)
+par(mfrow=c(2,2))
+
+boxplot(whas$age~whas$fstat,main = "Boxplot of Initial Age",xlab="Status(0=Alive)(1=Dead) of patients in the hospital.",ylab="Age of Patients in the Hospital",col="red")
+boxplot(whas$sysbp~whas$fstat,main = "Boxplot of Systolic Blood Pressure",xlab="Status(0=Alive)(1=Dead) of patients in the hospital",ylab="Systolic Blood Pressure of patients in the hospital",col=6)
+```
+
+## Cox PH and CI for our Second Gap Model
+|     From our CoxPH for our second gap model displaying time outside the hospital, we see one of these covaraites behaves very differently than our first gap model. Patients with Cardiogenic Shock actually have lower hazard rates(68% of Non-Shock Patients), however this isn't statistically significant as the p-value for shock is large at 0.493. We believe this great change in hazard rates is due to the small amount of patients who had Cardiogenic Shock(9 Subjects out of 461).**CI[0.22632,2.04588]** Is very large and contains 1, displaying the large amount of variation in this value and further displaying the insignificance of the coefficient.
+
+|     Our Age covariate values are slightly increased in comparison to the first gap model. We see that as subjects age a year, their hazard rate increases by 6%. This is statistically significant as our p-value is very small. **CI[1.05599,1.08401]** Doesn't contain 1, further showing that these differences between ages are significant.
+
+|     Our systolic blood pressure covariate values also stay similar to the first gap model. We see that as subjects blood pressure increases by one, their hazard ratio actually ever so slightly decreases. However, our p-value is large, displaying that these differences are not statistically significant unlike the first model, where Systolic Blood Pressure had a hazard ratio less than 1 and was significant. **CI[0.99426,1.00362]** Contains 1, further showing the insignificance of coefficient.
+
+```{r}
+coxph(marg.surv3~sho+age+sysbp,data=subset.whas)
+CI3 <-coxph(marg.surv3~sho+age+sysbp,data=subset.whas)
+exp(coef(CI3))
+as.table(exp(confint(CI3)))
+sum(subset.whas$sho==1)
+```
+
+
+## Cox PH Without Shock
+|     In our first gap model, many patients died of Cardiogenic Shock, as a result there were only 9 subjects with Cardiogenic Shock in our second gap model. We chose to remove Shock in our First and Second Gap Model, so it will not bias our Systolic Blood Pressure and Age Covaraites.
+
+|     For our First Gap Model, nothing really changes as we remove Cardiogenic Shock, the coefficients are the same but the p-values for age and systolic blood pressure are slightly smaller. The confidence intervals are also very similar to the first gap model
+
+|     For our Second Gap Model, again nothing really changes as we remove Cardiogenic Shock. Age stays the same, and Systolic Blood pressures coefficient stays the same, but the p-value actually increases, making it more insignificant than before. The confidence intervals are almost equivalent to the origial second gap model.
+```{r}
+#Gap 1
+coxph(marg.surv1~age+sysbp,data=whas)
+#Gap 2
+coxph(marg.surv3~age+sysbp,data=subset.whas)
+as.table(exp(confint(coxph(marg.surv1~age+sysbp,data=whas))))
+as.table(exp(confint(coxph(marg.surv3~age+sysbp,data=subset.whas))))
+```
+
+# Section 6: Conclusion
+
+|     Through forward selection with BIC as a source of model evaluation, it was found that the best model include cardiogenic shock, age, and systolic blood pressure. In specific, presence of cardiogenic shock yield significantly higher likelihoods of death (~4.5 times) in comparison to those not having cardiogenic shock. The proportional hazards assumptions was satisfied by multiple tests such as observing the Shoenfield residuals, cox.zph testing, and log-log plot to confirm confidently of our model. 
+
+|     The Recurrent Event Models gave us a new way to view our covariates. We were able to see the great difference in Cardiogenic Shock's hazard rate when comparing the two gap models. We were able to stratify over length of time in the hospital, to somewhat combine these two gap model. Giving us an overall model, which showed Cardiogenic Shock was significant overall in increasing the hazard rate, just less than we would have thought. This overall model was also able to confirm that an increase in age also resulted in an increase in hazard rate. Lastly we were able to see the interaction between this man-made length of stay in the hospital factor and our covariates. Which further showed the relationship between Cardiogenic Shock and quick deaths in the hospital.
+
+|     The most important thing that our recurrent events model was able to show was that Cardiogenic Shock has a very high hazard rate initially, but after that initial period the hazard rate for shock patients is either insignificantly different or slightly lower than non-shock patients. The small sample size of Cardiogenic Shock patients throws noise into these numbers, but a very interesting result from these models.
+
+\newpage
+
+# Appendix (Model Fitting)
+# First Round of Fitting 
+```{r}
+whas1 <- coxph(Surv(los, dstat) ~ age, data = whas)
+whas2 <- coxph(Surv(los, dstat) ~ gender, data = whas)
+whas3 <- coxph(Surv(los, dstat) ~ hr, data = whas)
+whas4 <- coxph(Surv(los, dstat) ~ sysbp, data = whas)
+whas5 <- coxph(Surv(los, dstat) ~ diasbp, data = whas)
+whas6 <- coxph(Surv(los, dstat) ~ bmi, data = whas)
+whas7 <- coxph(Surv(los, dstat) ~ cvd, data = whas)
+whas8 <- coxph(Surv(los, dstat) ~ afb, data = whas)
+whas9 <- coxph(Surv(los, dstat) ~ sho, data = whas)
+whas10 <- coxph(Surv(los, dstat) ~ chf, data = whas)
+whas11 <- coxph(Surv(los, dstat) ~ av3, data = whas)
+whas12 <- coxph(Surv(los, dstat) ~ miord, data = whas)
+whas13 <- coxph(Surv(los, dstat) ~ mitype, data = whas)
+whas14 <- coxph(Surv(los, dstat) ~ year, data = whas)
+
+BIC(whas1, whas2, whas3, whas4, whas5, whas6, whas7, whas8, whas9, whas10, whas11, whas12, whas13, whas14)
+```
+
+# Second Round of Fitting 
+```{r}
+whas9.1 <- coxph(Surv(los, dstat) ~ sho + age, data = whas)
+whas9.2 <- coxph(Surv(los, dstat) ~ sho + gender, data = whas)
+whas9.3 <- coxph(Surv(los, dstat) ~ sho + hr, data = whas)
+whas9.4 <- coxph(Surv(los, dstat) ~ sho + sysbp, data = whas)
+whas9.5 <- coxph(Surv(los, dstat) ~ sho + diasbp, data = whas)
+whas9.6 <- coxph(Surv(los, dstat) ~ sho + bmi, data = whas)
+whas9.7 <- coxph(Surv(los, dstat) ~ sho + cvd, data = whas)
+whas9.8 <- coxph(Surv(los, dstat) ~ sho + afb, data = whas)
+whas9.9 <- coxph(Surv(los, dstat) ~ sho + chf, data = whas)
+whas9.10 <- coxph(Surv(los, dstat) ~ sho + av3, data = whas)
+whas9.11 <- coxph(Surv(los, dstat) ~ sho + miord, data = whas)
+whas9.12 <- coxph(Surv(los, dstat) ~ sho + mitype, data = whas)
+whas9.13 <- coxph(Surv(los, dstat) ~ sho + year, data = whas)
+
+BIC(whas9.1, whas9.2, whas9.3, whas9.4, whas9.5, whas9.6, whas9.7, whas9.8, whas9.9, whas9.10, whas9.11, whas9.12, whas9.13)
+```
+
+# Third Round of Fitting 
+```{r}
+whas9.1.1 <- coxph(Surv(los, dstat) ~ sho + age + gender, data = whas)
+whas9.1.2 <- coxph(Surv(los, dstat) ~ sho + age + hr, data = whas)
+whas9.1.3 <- coxph(Surv(los, dstat) ~ sho + age + sysbp, data = whas)
+whas9.1.4 <- coxph(Surv(los, dstat) ~ sho + age + diasbp, data = whas)
+whas9.1.5 <- coxph(Surv(los, dstat) ~ sho + age + bmi, data = whas)
+whas9.1.6 <- coxph(Surv(los, dstat) ~ sho + age + cvd, data = whas)
+whas9.1.7 <- coxph(Surv(los, dstat) ~ sho + age + afb, data = whas)
+whas9.1.8 <- coxph(Surv(los, dstat) ~ sho + age + chf, data = whas)
+whas9.1.9 <- coxph(Surv(los, dstat) ~ sho + age + av3, data = whas)
+whas9.1.10 <- coxph(Surv(los, dstat) ~ sho + age + miord, data = whas)
+whas9.1.11 <- coxph(Surv(los, dstat) ~ sho + age + mitype, data = whas)
+whas9.1.12 <- coxph(Surv(los, dstat) ~ sho + age + year, data = whas)
+
+BIC(whas9.1.1, whas9.1.2, whas9.1.3, whas9.1.4, whas9.1.5, whas9.1.6, whas9.1.7, whas9.1.8, whas9.1.9,
+     whas9.1.10, whas9.1.11,  whas9.1.12)
+```
+
+# Fourth Round of Fitting 
+```{r}
+whas9.1.3.1 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + gender, data = whas)
+whas9.1.3.2 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + hr, data = whas)
+whas9.1.3.3 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + diasbp, data = whas)
+whas9.1.3.4 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + bmi, data = whas)
+whas9.1.3.5 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + cvd, data = whas)
+whas9.1.3.6 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + afb, data = whas)
+whas9.1.3.7 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + chf, data = whas)
+whas9.1.3.8 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + av3, data = whas)
+whas9.1.3.9 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + miord, data = whas)
+whas9.1.3.10 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + mitype, data = whas)
+whas9.1.3.11 <- coxph(Surv(los, dstat) ~ sho + age + sysbp + year, data = whas)
+
+BIC(whas9.1.3.1, whas9.1.3.2, whas9.1.3.3, whas9.1.3.4, whas9.1.3.5, whas9.1.3.6, whas9.1.3.7,
+     whas9.1.3.8, whas9.1.3.9, whas9.1.3.10, whas9.1.3.11)
+```
+
+\newpage
+
+# Citations
+David W. Hosmer, Jr., et al. *Applied Survival Analysis: Regression Modeling of Time-to-Event Data*. John 
+
+|     Wiley & Sons, 2011.
+
+"survminer: Survival Analysis and Visualization." *The Comprehensive R Archive Network*,
+
+|     cran.r-project.org/web/packages/survminer/readme/README.html.
+
+"WHAS Survival." *John Wiley & Sons*, ftp://ftp.wiley.com/public/sci_tech_med/survival.
