@@ -1,6 +1,6 @@
 # Survival Analysis of Heart Attack Patients 
 
-Multiple Kaplan-Meier plots were constructed on several covariates. A Cox proportional hazards model was contructed by forward selection with BIC as the guiding criterion. Model assumptions were checked through a log-log plot and residual analysis. 
+Several Kaplan-Meier plots were created on select covariates. Then a Cox proportional hazards model was constructed using forward fitting with BIC as the guiding criterion. Finally, a more complex, gap model was fit to the data. 
 
 ## Survival Analysis Heart Attack.Rmd
 R markdown file containing both code and commentary.
